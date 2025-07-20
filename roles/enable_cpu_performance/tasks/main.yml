@@ -1,0 +1,28 @@
+---
+- name: Gather CPU information
+  ansible.builtin.include_tasks: cpu_info.yml
+  tags: always
+
+- name: Attempt traditional CPU governor configuration
+  ansible.builtin.include_tasks: traditional.yml
+  tags: performance
+  register: traditional_result
+  ignore_errors: true
+
+- name: Check if traditional method succeeded
+  ansible.builtin.set_fact:
+    traditional_success: "{{ traditional_result is not failed }}"
+
+- name: Fallback to TuneD if traditional method failed
+  ansible.builtin.include_tasks: tuned.yml
+  when:
+    - not traditional_success
+    - cpu_performance_enabled
+  tags: performance
+
+- name: Configure C-States
+  ansible.builtin.include_tasks: cstates.yml
+  tags: cstates
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers

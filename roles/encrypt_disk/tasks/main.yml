@@ -1,0 +1,12 @@
+---
+- name: Include pre-checks
+  ansible.builtin.include_tasks: prechecks.yml
+  tags: always
+
+- name: Perform encryption
+  ansible.builtin.include_tasks: encryption.yml
+  tags: encryption
+
+- name: Configure post-encryption
+  ansible.builtin.include_tasks: postsetup.yml
+  tags: configuration

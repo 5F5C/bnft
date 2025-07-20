@@ -1,0 +1,8 @@
+- name: Rename_network_iface CPU_performance Encrypt_second_disk
+  hosts: all
+  gather_facts: true
+  become: yes
+  roles:
+    - rename_network_interface
+    - enable_cpu_performance
+    - encrypt_disk

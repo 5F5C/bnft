@@ -1,0 +1,16 @@
+---
+- name: update grub
+  ansible.builtin.command: update-grub
+  register: grub_update
+
+- name: debug grub update
+  ansible.builtin.debug:
+    var: grub_update
+  when: cstate_debug
+
+- name: reboot system
+  ansible.builtin.reboot:
+    msg: "Rebooting to apply C-state settings"
+    connect_timeout: 5
+    reboot_timeout: 600
+  when: require_reboot

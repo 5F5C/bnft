@@ -1,0 +1,35 @@
+---
+- name: Install tuned
+  ansible.builtin.apt:
+    name: tuned
+    state: present
+    update_cache: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Enable and start tuned service
+  ansible.builtin.systemd:
+    name: tuned
+    state: started
+    enabled: yes
+
+- name: Apply latency-performance profile
+  ansible.builtin.command: tuned-adm profile latency-performance
+  register: tuned_profile_set
+
+- name: Verify active profile
+  ansible.builtin.command: tuned-adm active
+  register: tuned_active
+  changed_when: false
+
+- name: Display tuned status
+  ansible.builtin.debug:
+    msg: "Active TuneD profile: {{ tuned_active.stdout }}"
+  when: cstate_debug
+
+- name: Ensure profile persists
+  ansible.builtin.copy:
+    dest: /etc/tuned/active_profile
+    content: "latency-performance"
+    owner: root
+    group: root
+    mode: '0644'

@@ -1,0 +1,108 @@
+---
+- name: Initialize cstate_params
+  ansible.builtin.set_fact:
+    cstate_params: ""
+  when: cstate_tuning_enabled
+
+- name: Gather essential CPU facts
+  ansible.builtin.setup:
+    gather_subset:
+      - '!all'
+      - '!min'
+      - 'hardware'
+    filter:
+      - 'ansible_system_vendor'
+      - 'ansible_processor'
+      - 'ansible_architecture'
+      - 'ansible_product_name'
+  register: cpu_facts
+  when: cstate_tuning_enabled
+  changed_when: false
+
+- name: Set normalized CPU vendor fact (AWS optimized)
+  ansible.builtin.set_fact:
+    cpu_vendor: >-
+      {% set vendor_string = (ansible_system_vendor | lower) %}
+      {% set processor_info = (ansible_processor[1] | default('', true) | lower) %}
+      {% set arch = (ansible_architecture | default('', true) | lower) %}
+      
+      {# AWS Detection #}
+      {% if 'ec2' in vendor_string or 'amazon' in vendor_string %}
+        {% if 'intel' in processor_info or 'xeon' in processor_info %}
+          aws_intel
+        {% elif 'amd' in processor_info or 'epyc' in processor_info %}
+          aws_amd
+        {% elif 'arm' in arch or 'aarch' in arch %}
+          aws_arm
+        {% else %}
+          aws_unknown
+        {% endif %}
+      
+      {# Standard Detection #}
+      {% elif 'intel' in processor_info %}
+        intel
+      {% elif 'amd' in processor_info %}
+        amd
+      {% elif 'arm' in arch %}
+        arm
+      {% elif 'apple' in vendor_string %}
+        apple
+      {% else %}
+        unknown
+      {% endif %}
+  when: cstate_tuning_enabled
+
+- name: Set C-State parameters per vendor
+  ansible.builtin.set_fact:
+    cstate_params: >-
+      {% if 'intel' in cpu_vendor or 'aws_intel' in cpu_vendor %}
+      intel_idle.max_cstate=0 processor.max_cstate=0
+      {% elif 'amd' in cpu_vendor or 'aws_amd' in cpu_vendor %}
+      processor.max_cstate=0
+      {% elif 'arm' in cpu_vendor or 'aws_arm' in cpu_vendor %}
+      processor.max_cstate=1
+      {% else %}
+      {# Empty for unsupported CPUs #}
+      {% endif %}
+  when: cstate_tuning_enabled
+
+- name: Debug CPU vendor detection
+  ansible.builtin.debug:
+    msg: |
+      === CPU VENDOR DETECTION ===
+      - System Vendor: {{ ansible_system_vendor }}
+      - Processor: {{ ansible_processor }}
+      - Architecture: {{ ansible_architecture }}
+      - Product Name: {{ ansible_product_name }}
+      - Detected Vendor: {{ cpu_vendor }}
+      - C-State Params: '{{ cstate_params | trim }}'
+  when:
+    - cstate_tuning_enabled
+    - cstate_debug
+  changed_when: false
+
+- name: Configure GRUB C-State settings
+  ansible.builtin.template:
+    src: 99-cstates.cfg.j2
+    dest: /etc/default/grub.d/99-cstates.cfg
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - cstate_tuning_enabled
+    - cstate_params | trim != ""
+  register: grub_config
+  notify: update grub
+
+- name: Handle unsupported CPU vendor
+  ansible.builtin.debug:
+    msg: |
+      Unsupported CPU configuration:
+      - Vendor: {{ cpu_vendor }}
+      - Processor: {{ ansible_processor }}
+      - Architecture: {{ ansible_architecture }}
+      No C-state parameters applied.
+  when:
+    - cstate_tuning_enabled
+    - cstate_params | trim == ""
+  changed_when: false

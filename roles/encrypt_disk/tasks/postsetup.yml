@@ -1,0 +1,50 @@
+---
+- name: Create mount point directory
+  ansible.builtin.file:
+    path: "{{ luks_mount_point }}"
+    state: directory
+    mode: '0700'
+
+- name: Update crypttab
+  ansible.builtin.template:
+    src: crypttab.j2
+    dest: /etc/crypttab
+    owner: root
+    group: root
+    mode: '0600'
+  register: crypttab_update
+
+- name: Update fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "/dev/mapper/crypt_{{ luks_target_disk | basename }} {{ luks_mount_point }} {{ luks_filesystem }} {{ luks_mount_options }} 0 2"
+    state: present
+    insertafter: EOF
+  register: fstab_update
+
+- name: Mount encrypted volume
+  ansible.builtin.mount:
+    path: "{{ luks_mount_point }}"
+    src: "/dev/mapper/crypt_{{ luks_target_disk | basename }}"
+    fstype: "{{ luks_filesystem }}"
+    state: mounted
+    opts: "{{ luks_mount_options }}"
+  register: mount_result
+
+- name: Verify encryption status
+  ansible.builtin.command: |
+    cryptsetup status "crypt_{{ luks_target_disk | basename }}"
+  register: luks_status
+  changed_when: false
+  ignore_errors: true  # Continue even if device not active
+
+- name: Display summary
+  ansible.builtin.debug:
+    msg: |
+      LUKS ENCRYPTION SUMMARY
+      =======================
+      Encrypted Device: {{ luks_target_disk }}
+      Mapper Name: crypt_{{ luks_target_disk | basename }}
+      Mount Point: {{ luks_mount_point }}
+      Filesystem: {{ luks_filesystem }}
+      Encryption Status: {{ luks_status.stdout | default('Encryption status unavailable') }}

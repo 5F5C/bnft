@@ -1,0 +1,17 @@
+---
+# CPU Frequency Settings
+cpu_performance_enabled: true
+cpu_governor: "performance"
+
+# C-State Settings
+cstate_tuning_enabled: true
+cstate_debug: false
+
+# Hyper-Threading Reporting
+ht_reporting_enabled: true
+
+# Safety Controls
+require_reboot: true
+
+# Cloud Detection
+prefer_tuned_for_cloud: true

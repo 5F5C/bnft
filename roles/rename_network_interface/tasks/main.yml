@@ -1,0 +1,48 @@
+---
+- name: Get default network interface facts
+  ansible.builtin.set_fact:
+    current_iface_name: "{{ ansible_facts.default_ipv4.alias | default(ansible_facts.default_ipv4.interface) }}"
+    current_iface_mac_address: "{{ ansible_facts.default_ipv4.macaddress }}"
+    original_iface_name: "{{ ansible_facts.default_ipv4.alias | default(ansible_facts.default_ipv4.interface) }}"
+    new_iface_name: "{{ new_interface_name | default('net0') }}"
+
+- name: Show current interface information
+  ansible.builtin.debug:
+    msg: |
+      CURRENT NETWORK CONFIGURATION:
+      - Interface name: {{ current_iface_name }}
+      - MAC address: {{ current_iface_mac_address }}
+
+- name: Fail if interface information is missing
+  ansible.builtin.fail:
+    msg: "Cannot proceed - interface name or MAC address is empty!"
+  when:
+    - current_iface_name | default('') == ''
+    - or current_iface_mac_address | default('') == ''
+
+- name: Update set-name in Netplan config
+  ansible.builtin.lineinfile:
+    path: /etc/netplan/50-cloud-init.yaml
+    regexp: '^(\s*)set-name:.*$'
+    line: '\1set-name: "{{ new_iface_name }}"'
+    backrefs: yes
+    state: present
+  vars:
+    new_iface_name: "net0"
+  notify: apply netplan
+
+- name: Apply changes
+  meta: flush_handlers
+
+- name: Show rename summary
+  ansible.builtin.debug:
+    msg: |
+      NETWORK INTERFACE RENAME SUMMARY:
+      - Previous name: {{ original_iface_name }}
+      - New name: {{ new_iface_name }}
+      - MAC address: {{ current_iface_mac_address }}
+      - Netplan config: /etc/netplan/50-cloud-init.yaml
+  when:
+    - current_iface_name is defined
+    - current_iface_mac_address is defined
+    - current_iface_name != new_iface_name

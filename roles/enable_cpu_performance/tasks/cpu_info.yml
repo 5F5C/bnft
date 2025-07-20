@@ -1,0 +1,45 @@
+---
+- name: Gather CPU information
+  ansible.builtin.setup:
+    gather_subset:
+      - '!all'
+      - 'hardware'
+    filter: 'ansible_processor*'
+  register: cpu_facts
+  changed_when: false
+  tags: always
+
+- name: Set normalized CPU vendor fact
+  ansible.builtin.set_fact:
+    cpu_vendor: "{{ (ansible_processor_vcpus.0.vendor | default(ansible_processor.0, true) | lower) }}"
+  tags: always
+
+- name: Display CPU information
+  ansible.builtin.debug:
+    msg: |
+      CPU Vendor: {{ cpu_vendor }}
+      CPU Cores: {{ ansible_processor_cores }}
+      CPU Count: {{ ansible_processor_count }}
+      CPU Model: {{ ansible_processor[1] if ansible_processor[1] is defined else ansible_processor[0] }}
+  when: cstate_debug
+  changed_when: false
+
+- name: Get detailed CPU info via lscpu
+  ansible.builtin.command: lscpu
+  register: lscpu_output
+  changed_when: false
+  tags: diagnostics
+
+- name: Display CPU details
+  ansible.builtin.debug:
+    var: lscpu_output.stdout_lines
+  when: cstate_debug
+  changed_when: false
+
+- name: Determine Hyper-Threading status via facts
+  set_fact:
+    hyperthreading_enabled: "{{ (ansible_processor_vcpus | int) > (ansible_processor_cores | int) }}"
+  when: ansible_processor_vcpus is defined and ansible_processor_cores is defined
+
+- debug: msg="Hyper‑Threading is enabled"
+  when: hyperthreading_enabled

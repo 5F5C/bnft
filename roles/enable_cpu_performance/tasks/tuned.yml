@@ -1,0 +1,31 @@
+- name: Configure CPU performance mode for AWS
+  block:
+    - name: Install tuned
+      ansible.builtin.apt:
+        name: tuned
+        state: present
+
+    - name: Enable and start tuned service
+      ansible.builtin.systemd:
+        name: tuned
+        state: started
+        enabled: yes
+
+    - name: Set latency-performance profile
+      ansible.builtin.shell: |
+        tuned-adm profile latency-performance
+      args:
+        executable: /bin/bash
+
+    - name: Verify active profile
+      ansible.builtin.command: tuned-adm active
+      register: tuned_status
+      changed_when: false
+
+    - name: Display tuned status
+      ansible.builtin.debug:
+        var: tuned_status.stdout
+
+  when:
+    - cpu_performance_enabled
+    - ansible_system_vendor == "Amazon EC2"

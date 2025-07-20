@@ -1,0 +1,22 @@
+---
+# Required: Target disk to encrypt (no default - must be specified)
+
+# Encryption credentials
+luks_encryption_password: "superStrongPassword123"
+
+# Encryption parameters
+luks_cipher: "aes-xts-plain64"
+luks_hash: "sha512"
+luks_key_size: 512
+luks_iter_time: 5000
+luks_pbkdf: "argon2id"  # More secure than PBKDF2
+
+# Safety controls
+luks_safety_check: true
+luks_force_reencrypt: false
+luks_debug_mode: false
+
+# Filesystem settings
+luks_filesystem: "ext4"
+luks_mount_point: "/mnt/encrypted_disk"
+luks_mount_options: "defaults"

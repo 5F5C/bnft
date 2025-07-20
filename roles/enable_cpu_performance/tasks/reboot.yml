@@ -1,0 +1,22 @@
+---
+- name: Check if reboot is pending
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+
+- name: Prompt for manual reboot
+  ansible.builtin.pause:
+    prompt: |
+      System requires reboot to apply changes.
+      You can safely cancel and reboot later.
+      Reboot now? (yes/no)
+    echo: yes
+  when: reboot_required.stat.exists
+  register: manual_reboot
+
+- name: Execute manual reboot
+  ansible.builtin.reboot:
+    msg: "Manual reboot requested"
+    connect_timeout: 5
+    reboot_timeout: 600
+  when: manual_reboot.user_input == "yes"

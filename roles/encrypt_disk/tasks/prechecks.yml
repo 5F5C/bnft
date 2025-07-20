@@ -1,0 +1,60 @@
+---
+- name: Verify cryptsetup is installed
+  ansible.builtin.package:
+    name: cryptsetup
+    state: present
+  register: cryptsetup_install
+  changed_when: cryptsetup_install.changed
+  when: ansible_os_family == "Debian"
+
+- name: Verify target disk exists
+  ansible.builtin.command: lsblk -no NAME {{ luks_target_disk }}
+  register: disk_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Fail if disk doesn't exist
+  ansible.builtin.fail:
+    msg: "Target disk {{ luks_target_disk }} not found!"
+  when: disk_check.rc != 0
+
+- name: Check current encryption status
+  community.crypto.luks_device:
+    device: "{{ luks_target_disk }}"
+    state: info
+  register: luks_info
+  ignore_errors: yes
+  changed_when: false
+
+- name: Fail if already encrypted (unless forced)
+  ansible.builtin.fail:
+    msg: >
+      Disk {{ luks_target_disk }} is already encrypted!
+      Set luks_force_reencrypt=true to override.
+  when:
+    - luks_info is not failed
+    - not luks_force_reencrypt
+
+- name: Show disk information
+  ansible.builtin.debug:
+    msg: |
+      Disk to encrypt: {{ luks_target_disk }}
+      Current partitions:
+      {{ ansible.builtin.command('lsblk -f ' + luks_target_disk).stdout }}
+  when: luks_debug_mode
+
+- name: Confirm encryption (interactive)
+  ansible.builtin.pause:
+    prompt: |
+      WARNING: ALL DATA ON {{ luks_target_disk }} WILL BE DESTROYED!
+      Are you sure you want to proceed? (yes/no)
+    echo: yes
+  when: luks_safety_check
+  register: encryption_confirmation
+
+- name: Abort if not confirmed
+  ansible.builtin.fail:
+    msg: "Encryption aborted by user"
+  when:
+    - luks_safety_check
+    - encryption_confirmation.user_input != "yes"

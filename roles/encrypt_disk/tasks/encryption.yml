@@ -1,0 +1,42 @@
+---
+- name: Create LUKS2 encrypted device
+  community.crypto.luks_device:
+    device: "{{ luks_target_disk }}"
+    state: present
+    passphrase: "{{ luks_encryption_password }}"
+    keyslot: 0
+    type: luks2
+  no_log: true
+  register: luks_create
+
+- name: Debug LUKS creation
+  ansible.builtin.debug:
+    var: luks_create
+  when: luks_debug_mode | default(false)
+
+- name: Open encrypted device
+  community.crypto.luks_device:
+    device: "{{ luks_target_disk }}"
+    state: opened
+    name: "crypt_{{ luks_target_disk | basename }}"
+    passphrase: "{{ luks_encryption_password }}"
+  no_log: true
+  register: luks_open
+  when: luks_create.changed
+
+- name: Debug device opening
+  ansible.builtin.debug:
+    var: luks_open
+  when: luks_debug_mode | default(false)
+
+- name: Create filesystem
+  community.general.filesystem:
+    dev: "/dev/mapper/crypt_{{ luks_target_disk | basename }}"
+    fstype: "{{ luks_filesystem | default('ext4') }}"
+    force: yes
+  when: luks_open.changed
+
+- name: Debug filesystem creation
+  ansible.builtin.debug:
+    var: fs_create
+  when: luks_debug_mode | default(false)
